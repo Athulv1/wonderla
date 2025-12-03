@@ -145,7 +145,7 @@ class CentroidTracker:
 class HeadCounterZones:
     """Head counter using zone-based detection (upper and lower boxes)"""
     
-    def __init__(self, model_name='yolov8n.pt', conf_threshold=0.25, iou_threshold=0.45):
+    def __init__(self, model_name='yolov8n.pt', conf_threshold=0.20, iou_threshold=0.40):
         print(f"Loading YOLOv8 model: {model_name}")
         self.model = YOLO(model_name)
         self.conf_threshold = conf_threshold
@@ -237,7 +237,7 @@ class HeadCounterZones:
             writer = cv2.VideoWriter(str(output_path), fourcc, fps, output_size)
         
         # Initialize tracker with improved parameters
-        tracker = CentroidTracker(max_disappeared=80, max_distance=150)
+        tracker = CentroidTracker(max_disappeared=100, max_distance=200)
         in_count = 0
         out_count = 0
         
@@ -375,12 +375,18 @@ class HeadCounterZones:
                 writer.write(annotated)
             
             if show:
+                # Resize for display if too large
+                display_frame = annotated.copy()
+                if annotated.shape[1] > 1280:
+                    display_h = int(annotated.shape[0] * (1280 / annotated.shape[1]))
+                    display_frame = cv2.resize(annotated, (1280, display_h))
+                
                 if paused:
-                    cv2.rectangle(annotated, (10, 120), (250, 150), (0, 0, 0), -1)
-                    cv2.putText(annotated, "PAUSED - Press 'P'", (20, 140),
+                    cv2.rectangle(display_frame, (10, 120), (250, 150), (0, 0, 0), -1)
+                    cv2.putText(display_frame, "PAUSED - Press 'P'", (20, 140),
                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
                 
-                cv2.imshow('Head Counter - Zones', annotated)
+                cv2.imshow('Head Counter - Zones', display_frame)
                 
                 wait_time = 0 if paused else 1
                 key = cv2.waitKey(wait_time) & 0xFF
@@ -452,7 +458,7 @@ def main():
     parser.add_argument('--video', type=str, required=True, help='Path to input video')
     parser.add_argument('--output', type=str, help='Path to save output video')
     parser.add_argument('--model', type=str, default='yolov8n.pt', help='YOLOv8 model')
-    parser.add_argument('--conf', type=float, default=0.25, help='Confidence threshold')
+    parser.add_argument('--conf', type=float, default=0.20, help='Confidence threshold')
     parser.add_argument('--roi-config', type=str, default='head_counter_config.json',
                         help='Path to ROI config file')
     parser.add_argument('--show', action='store_true', help='Show live preview')
