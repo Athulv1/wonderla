@@ -95,7 +95,7 @@ class CentroidTracker:
             # Lower distance and higher IoU = better match
             # Normalize and combine (IoU weighted higher)
             D_norm = D / (D.max() + 1e-5)
-            combined_score = D_norm - (iou_matrix * 2)  # IoU weighted 2x
+            combined_score = D_norm - (iou_matrix * 1.5)  # IoU weighted 1.5x for better separation
             
             rows = combined_score.min(axis=1).argsort()
             cols = combined_score.argmin(axis=1)[rows]
@@ -108,7 +108,8 @@ class CentroidTracker:
                     continue
                 
                 # Only match if distance is reasonable OR IoU is good
-                if D[row, col] > self.max_distance and iou_matrix[row, col] < 0.3:
+                # Lower IoU threshold to prevent merging separate close heads
+                if D[row, col] > self.max_distance and iou_matrix[row, col] < 0.25:
                     continue
                 
                 object_id = object_ids[row]
@@ -145,15 +146,18 @@ class CentroidTracker:
 class HeadCounterZones:
     """Head counter using zone-based detection (upper and lower boxes)"""
     
-    def __init__(self, model_name='yolov8n.pt', conf_threshold=0.20, iou_threshold=0.40):
+    def __init__(self, model_name='yolov8n.pt', conf_threshold=0.20, iou_threshold=0.50, min_box_area=400, box_shrink=0.3):
         print(f"Loading YOLOv8 model: {model_name}")
         self.model = YOLO(model_name)
         self.conf_threshold = conf_threshold
         self.iou_threshold = iou_threshold
         self.person_class_id = 0
+        self.min_box_area = min_box_area  # Minimum bounding box area to filter tiny detections
+        self.box_shrink = box_shrink  # Shrink bounding boxes by this ratio (0.3 = 30% smaller)
         
         print(f"✓ Model loaded successfully")
         print(f"  Mode: Zone-based counting (upper/lower boxes)")
+        print(f"  Bounding box shrink: {int(box_shrink * 100)}%")
     
     def count_video(self, video_path, output_path=None, show=False, 
                     roi_config_file='head_counter_config.json', 
@@ -277,14 +281,39 @@ class HeadCounterZones:
                 verbose=False
             )[0]
             
-            # Collect detections
+            # Collect detections for tracking with size filtering
             detections_for_tracking = []
             current_head_count = 0
             
             for box in results.boxes:
                 bbox = box.xyxy[0].cpu().numpy()
-                detections_for_tracking.append(bbox)
-                current_head_count += 1
+                
+                # Calculate box area
+                box_width = bbox[2] - bbox[0]
+                box_height = bbox[3] - bbox[1]
+                box_area = box_width * box_height
+                
+                # Filter out very small detections (noise/partial detections)
+                if box_area >= self.min_box_area:
+                    # Shrink bounding box to reduce overlap
+                    # Calculate center point
+                    cx = (bbox[0] + bbox[2]) / 2
+                    cy = (bbox[1] + bbox[3]) / 2
+                    
+                    # Reduce width and height by shrink ratio
+                    new_width = box_width * (1 - self.box_shrink)
+                    new_height = box_height * (1 - self.box_shrink)
+                    
+                    # Create smaller box around center
+                    shrunken_bbox = [
+                        cx - new_width / 2,  # x1
+                        cy - new_height / 2,  # y1
+                        cx + new_width / 2,  # x2
+                        cy + new_height / 2   # y2
+                    ]
+                    
+                    detections_for_tracking.append(shrunken_bbox)
+                    current_head_count += 1
             
             if current_head_count > max_head_count:
                 max_head_count = current_head_count
@@ -459,6 +488,8 @@ def main():
     parser.add_argument('--output', type=str, help='Path to save output video')
     parser.add_argument('--model', type=str, default='yolov8n.pt', help='YOLOv8 model')
     parser.add_argument('--conf', type=float, default=0.20, help='Confidence threshold')
+    parser.add_argument('--min-size', type=int, default=400, help='Minimum detection box area (pixels)')
+    parser.add_argument('--box-shrink', type=float, default=0.3, help='Shrink bounding boxes by ratio (0.3 = 30%% smaller)')
     parser.add_argument('--roi-config', type=str, default='head_counter_config.json',
                         help='Path to ROI config file')
     parser.add_argument('--show', action='store_true', help='Show live preview')
@@ -468,7 +499,7 @@ def main():
     
     args = parser.parse_args()
     
-    counter = HeadCounterZones(model_name=args.model, conf_threshold=args.conf)
+    counter = HeadCounterZones(model_name=args.model, conf_threshold=args.conf, min_box_area=args.min_size, box_shrink=args.box_shrink)
     
     results = counter.count_video(
         video_path=args.video,
