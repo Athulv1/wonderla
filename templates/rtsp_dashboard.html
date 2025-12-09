@@ -1,0 +1,944 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pool Head Counter Dashboard - Wonderla</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1a2e 25%, #16213e 50%, #0f3460 75%, #1a1a2e 100%);
+            background-size: 400% 400%;
+            animation: gradientShift 15s ease infinite;
+            color: #ddd; 
+            position: relative;
+            min-height: 100vh;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.15) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(0, 212, 255, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 40% 20%, rgba(255, 0, 128, 0.08) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        
+        .container { 
+            display: grid; 
+            grid-template-columns: 260px 1fr; 
+            gap: 24px; 
+            min-height: 100vh; 
+            padding: 18px; 
+            position: relative; 
+            z-index: 1; 
+        }
+        
+        /* Sidebar */
+        .sidebar { 
+            background: linear-gradient(180deg, rgba(18, 19, 20, 0.95) 0%, rgba(23, 24, 26, 0.95) 100%);
+            backdrop-filter: blur(10px);
+            border-radius: 12px; 
+            padding: 18px; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 18px; 
+            height: fit-content; 
+            position: sticky; 
+            top: 18px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            animation: slideInLeft 0.5s ease-out;
+        }
+        
+        .brand { 
+            display: flex; 
+            align-items: center; 
+            flex-direction: column;
+            gap: 12px; 
+            margin-bottom: 10px;
+            padding: 15px;
+            background: rgba(59, 130, 246, 0.1);
+            border-radius: 10px;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+        
+        .brand-icon {
+            font-size: 42px;
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        .brand h1 { 
+            font-size: 20px; 
+            color: #fff; 
+            text-align: center;
+        }
+        
+        .brand .subtitle { 
+            font-size: 12px; 
+            color: #9aa0a6; 
+            text-align: center;
+        }
+        
+        .stats-mini {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 10px;
+        }
+        
+        .stat-mini {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s ease;
+        }
+        
+        .stat-mini:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(59, 130, 246, 0.3);
+        }
+        
+        .stat-mini-label {
+            font-size: 11px;
+            color: #9aa0a6;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+        
+        .stat-mini-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #fff;
+        }
+        
+        .stat-mini.in .stat-mini-value { color: #38ef7d; }
+        .stat-mini.out .stat-mini-value { color: #ff6a00; }
+        .stat-mini.pool .stat-mini-value { color: #667eea; }
+        
+        .quick-actions {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .quick-action-title {
+            font-size: 12px;
+            color: #8a8f96;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .action-btn {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(37, 99, 235, 0.1));
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            color: #fff;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+        
+        .action-btn:hover {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(37, 99, 235, 0.2));
+            border-color: rgba(59, 130, 246, 0.5);
+            transform: translateY(-2px);
+        }
+        
+        .action-btn.danger {
+            background: linear-gradient(135deg, rgba(224, 75, 75, 0.1), rgba(220, 38, 38, 0.1));
+            border-color: rgba(224, 75, 75, 0.3);
+        }
+        
+        .action-btn.danger:hover {
+            background: linear-gradient(135deg, rgba(224, 75, 75, 0.2), rgba(220, 38, 38, 0.2));
+            border-color: rgba(224, 75, 75, 0.5);
+        }
+        
+        .system-info {
+            margin-top: auto;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            font-size: 12px;
+        }
+        
+        .info-label { color: #9aa0a6; }
+        .info-value { 
+            color: #fff; 
+            font-weight: 600;
+            font-family: monospace;
+        }
+        
+        /* Main Content */
+        .main { 
+            overflow: auto; 
+            animation: fadeIn 0.6s ease-out;
+        }
+        
+        .topbar { 
+            background: linear-gradient(135deg, rgba(23, 24, 26, 0.95) 0%, rgba(31, 33, 37, 0.95) 100%);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+            padding: 20px 24px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            animation: slideDown 0.6s ease-out;
+        }
+        
+        .topbar-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .title h2 { 
+            font-size: 32px; 
+            color: #f1f3f5; 
+            margin-bottom: 8px;
+        }
+        
+        .sub { 
+            color: #9aa0a6; 
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #38ef7d;
+            animation: pulse 2s ease-in-out infinite;
+            box-shadow: 0 0 10px rgba(56, 239, 125, 0.7);
+        }
+        
+        .time-display {
+            font-size: 14px;
+            color: #9aa0a6;
+            font-family: monospace;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        /* Metrics Grid */
+        .metrics { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); 
+            gap: 20px; 
+            padding: 10px 6px;
+            margin-bottom: 24px;
+        }
+        
+        .metric-card { 
+            background: linear-gradient(135deg, rgba(23, 24, 26, 0.95) 0%, rgba(31, 33, 37, 0.95) 100%);
+            backdrop-filter: blur(10px);
+            padding: 25px; 
+            border-radius: 12px; 
+            transition: all 0.3s ease; 
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: var(--accent-gradient);
+        }
+        
+        .metric-card.in-card { --accent-gradient: linear-gradient(90deg, #11998e, #38ef7d); }
+        .metric-card.out-card { --accent-gradient: linear-gradient(90deg, #ee0979, #ff6a00); }
+        .metric-card.pool-card { 
+            --accent-gradient: linear-gradient(90deg, #667eea, #764ba2); 
+            grid-column: 1 / -1;
+        }
+        
+        .metric-card:hover { 
+            transform: translateY(-4px); 
+            box-shadow: 0 12px 32px rgba(59, 130, 246, 0.2), 0 0 40px rgba(59, 130, 246, 0.1);
+            border-color: rgba(59, 130, 246, 0.3);
+        }
+        
+        .metric-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        
+        .metric-icon {
+            font-size: 32px;
+            opacity: 0.9;
+        }
+        
+        .metric-trend {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 6px;
+            background: rgba(56, 239, 125, 0.15);
+            color: #38ef7d;
+            border: 1px solid rgba(56, 239, 125, 0.3);
+        }
+        
+        .metric-trend.down {
+            background: rgba(255, 106, 0, 0.15);
+            color: #ff6a00;
+            border-color: rgba(255, 106, 0, 0.3);
+        }
+        
+        .metric-label {
+            font-size: 14px;
+            color: #9aa0a6;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+        
+        .metric-value {
+            font-size: 48px;
+            font-weight: 700;
+            color: #fff;
+            line-height: 1;
+            margin-bottom: 15px;
+            font-feature-settings: 'tnum';
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .comparison-bar {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 12px;
+        }
+        
+        .comparison-fill {
+            height: 100%;
+            background: var(--accent-gradient);
+            transition: width 0.5s ease;
+            border-radius: 3px;
+        }
+        
+        /* Pool Count Special Card */
+        .pool-banner {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px;
+            border-radius: 16px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .pool-banner::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%);
+            animation: pulseGlow 4s ease-in-out infinite;
+        }
+        
+        @keyframes pulseGlow {
+            0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.5; }
+            50% { transform: scale(1.1) rotate(180deg); opacity: 0.8; }
+        }
+        
+        .pool-content {
+            position: relative;
+            z-index: 1;
+        }
+        
+        .pool-label {
+            font-size: 16px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+            opacity: 0.9;
+            color: #fff;
+        }
+        
+        .pool-value {
+            font-size: 72px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
+            animation: countPulse 2s ease-in-out infinite;
+            color: #fff;
+        }
+        
+        @keyframes countPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.03); }
+        }
+        
+        .pool-subtext {
+            font-size: 16px;
+            opacity: 0.9;
+            margin-bottom: 25px;
+            color: #fff;
+        }
+        
+        .pool-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+        
+        .pool-stat {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+        
+        .pool-stat:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+        
+        .pool-stat-label {
+            font-size: 12px;
+            opacity: 0.9;
+            margin-bottom: 8px;
+            color: #fff;
+        }
+        
+        .pool-stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #fff;
+        }
+        
+        /* Video Section */
+        .video-section {
+            background: linear-gradient(135deg, rgba(23, 24, 26, 0.95) 0%, rgba(31, 33, 37, 0.95) 100%);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+            overflow: hidden;
+            margin: 0 6px;
+        }
+        
+        .video-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 20px 24px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .video-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 18px;
+            font-weight: 600;
+            color: #f1f3f5;
+        }
+        
+        .fps-badge {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 13px;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+        
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            background: #000;
+            min-height: 480px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .video-wrapper img {
+            max-width: 100%;
+            max-height: 600px;
+            height: auto;
+            display: block;
+            margin: 0 auto;
+            object-fit: contain;
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        /* Alert Banner */
+        .alert-banner {
+            position: fixed;
+            top: 20px;
+            right: 280px;
+            background: linear-gradient(135deg, #ff6b6b, #ee5a6f);
+            color: white;
+            padding: 16px 24px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(255, 107, 107, 0.5);
+            display: none;
+            z-index: 1000;
+            animation: slideInRight 0.5s ease-out;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 400px;
+        }
+        
+        .alert-banner.show { display: block; }
+        
+        .alert-banner strong {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 15px;
+        }
+        
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes slideInLeft {
+            from { opacity: 0; transform: translateX(-30px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        
+        @keyframes slideInRight {
+            from { opacity: 0; transform: translateX(30px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                position: relative;
+                top: 0;
+            }
+            
+            .alert-banner {
+                right: 20px;
+                left: 20px;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .metrics {
+                grid-template-columns: 1fr;
+            }
+            
+            .pool-value {
+                font-size: 56px;
+            }
+            
+            .metric-value {
+                font-size: 36px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Alert Banner -->
+        <div class="alert-banner" id="alert-banner">
+            <strong>⚠️ High Capacity Alert!</strong>
+            Pool count exceeded 90% of maximum capacity
+        </div>
+        
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-icon">🏊</div>
+                <h1>Wonderla</h1>
+                <div class="subtitle">Pool Monitoring System</div>
+            </div>
+            
+            <div class="stats-mini">
+                <div class="stat-mini in">
+                    <div class="stat-mini-label">Total In</div>
+                    <div class="stat-mini-value" id="sidebar-in">0</div>
+                </div>
+                <div class="stat-mini out">
+                    <div class="stat-mini-label">Total Out</div>
+                    <div class="stat-mini-value" id="sidebar-out">0</div>
+                </div>
+                <div class="stat-mini pool">
+                    <div class="stat-mini-label">In Pool</div>
+                    <div class="stat-mini-value" id="sidebar-pool">0</div>
+                </div>
+            </div>
+            
+            <div class="quick-actions">
+                <div class="quick-action-title">Quick Actions</div>
+                <button class="action-btn" onclick="toggleFullscreen()">
+                    🖥️ Fullscreen Mode
+                </button>
+                <button class="action-btn danger" onclick="resetCounters()">
+                    🔄 Reset Counters
+                </button>
+            </div>
+            
+            <div class="system-info">
+                <div class="info-item">
+                    <span class="info-label">Status:</span>
+                    <span class="info-value" style="color: #38ef7d;">● LIVE</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">FPS:</span>
+                    <span class="info-value" id="sidebar-fps">0</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Uptime:</span>
+                    <span class="info-value" id="uptime">00:00:00</span>
+                </div>
+            </div>
+        </aside>
+        
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Topbar -->
+            <div class="topbar">
+                <div class="topbar-content">
+                    <div class="title">
+                        <h2>Live Pool Monitoring</h2>
+                        <div class="sub">
+                            <span class="status-indicator"></span>
+                            Real-time RTSP Stream Analysis
+                        </div>
+                    </div>
+                    <div class="time-display" id="current-time"></div>
+                </div>
+            </div>
+            
+            <!-- Metrics -->
+            <div class="metrics">
+                <!-- IN Card -->
+                <div class="metric-card in-card">
+                    <div class="metric-header">
+                        <div class="metric-icon">🔽</div>
+                        <div class="metric-trend" id="in-trend" style="display: none;">
+                            <span>↗</span>
+                            <span id="in-change">+0</span>
+                        </div>
+                    </div>
+                    <div class="metric-label">Total Entered</div>
+                    <div class="metric-value" id="in-count">0</div>
+                    <div class="comparison-bar">
+                        <div class="comparison-fill" id="in-bar" style="--accent-gradient: linear-gradient(90deg, #11998e, #38ef7d); width: 0%"></div>
+                    </div>
+                </div>
+                
+                <!-- OUT Card -->
+                <div class="metric-card out-card">
+                    <div class="metric-header">
+                        <div class="metric-icon">🔼</div>
+                        <div class="metric-trend down" id="out-trend" style="display: none;">
+                            <span>↘</span>
+                            <span id="out-change">+0</span>
+                        </div>
+                    </div>
+                    <div class="metric-label">Total Exited</div>
+                    <div class="metric-value" id="out-count">0</div>
+                    <div class="comparison-bar">
+                        <div class="comparison-fill" id="out-bar" style="--accent-gradient: linear-gradient(90deg, #ee0979, #ff6a00); width: 0%"></div>
+                    </div>
+                </div>
+                
+                <!-- Pool Count Card -->
+                <div class="metric-card pool-card">
+                    <div class="pool-banner">
+                        <div class="pool-content">
+                            <div class="pool-label">🏊 Current Pool Count</div>
+                            <div class="pool-value" id="pool-count">0</div>
+                            <div class="pool-subtext">People Currently in Pool Area</div>
+                            
+                            <div class="pool-stats">
+                                <div class="pool-stat">
+                                    <div class="pool-stat-label">Active Heads</div>
+                                    <div class="pool-stat-value" id="current-heads">0</div>
+                                </div>
+                                <div class="pool-stat">
+                                    <div class="pool-stat-label">Processing FPS</div>
+                                    <div class="pool-stat-value" id="fps-stat">0</div>
+                                </div>
+                                <div class="pool-stat">
+                                    <div class="pool-stat-label">Occupancy Rate</div>
+                                    <div class="pool-stat-value" id="occupancy-rate">0%</div>
+                                </div>
+                                <div class="pool-stat">
+                                    <div class="pool-stat-label">Peak Today</div>
+                                    <div class="pool-stat-value" id="peak-count">0</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Video Feed -->
+            <div class="video-section">
+                <div class="video-header">
+                    <div class="video-title">
+                        <span>📹</span>
+                        <span>Live Camera Feed</span>
+                    </div>
+                    <div class="fps-badge">
+                        <span id="fps-badge">0 FPS</span>
+                    </div>
+                </div>
+                <div class="video-wrapper">
+                    <img src="{{ url_for('video_feed') }}" alt="RTSP Stream">
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // State tracking
+        let previousStats = { in_count: 0, out_count: 0, pool_count: 0, current_heads: 0, fps: 0 };
+        let peakCount = 0;
+        let startTime = Date.now();
+        const MAX_CAPACITY = 50;
+        
+        // Update time displays
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('current-time').textContent = now.toLocaleString('en-US', {
+                month: 'short', day: 'numeric', year: 'numeric',
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
+            
+            // Update uptime
+            const elapsed = Date.now() - startTime;
+            const hours = Math.floor(elapsed / 3600000);
+            const minutes = Math.floor((elapsed % 3600000) / 60000);
+            const seconds = Math.floor((elapsed % 60000) / 1000);
+            document.getElementById('uptime').textContent = 
+                `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+        
+        // Update statistics
+        function updateStats() {
+            fetch('/stats')
+                .then(r => r.json())
+                .then(data => {
+                    // Update main values
+                    animateValue('in-count', data.in_count);
+                    animateValue('out-count', data.out_count);
+                    animateValue('pool-count', data.pool_count);
+                    animateValue('current-heads', data.current_heads);
+                    animateValue('fps-stat', data.fps);
+                    
+                    // Update sidebar
+                    document.getElementById('sidebar-in').textContent = data.in_count;
+                    document.getElementById('sidebar-out').textContent = data.out_count;
+                    document.getElementById('sidebar-pool').textContent = data.pool_count;
+                    document.getElementById('sidebar-fps').textContent = data.fps.toFixed(1);
+                    
+                    // Update FPS badges
+                    document.getElementById('fps-badge').textContent = data.fps.toFixed(1) + ' FPS';
+                    
+                    // Update trends
+                    updateTrend('in', data.in_count, previousStats.in_count);
+                    updateTrend('out', data.out_count, previousStats.out_count);
+                    
+                    // Update comparison bars
+                    const total = data.in_count + data.out_count;
+                    if (total > 0) {
+                        document.getElementById('in-bar').style.width = ((data.in_count / total) * 100) + '%';
+                        document.getElementById('out-bar').style.width = ((data.out_count / total) * 100) + '%';
+                    }
+                    
+                    // Update peak
+                    if (data.pool_count > peakCount) {
+                        peakCount = data.pool_count;
+                        animateValue('peak-count', peakCount);
+                    }
+                    
+                    // Update occupancy
+                    const occupancy = Math.min((data.pool_count / MAX_CAPACITY) * 100, 100);
+                    document.getElementById('occupancy-rate').textContent = occupancy.toFixed(0) + '%';
+                    
+                    // Check capacity alert
+                    if (data.pool_count >= MAX_CAPACITY * 0.9) showAlert();
+                    
+                    previousStats = {...data};
+                })
+                .catch(err => console.error('Stats error:', err));
+        }
+        
+        function animateValue(id, newValue) {
+            const el = document.getElementById(id);
+            const current = parseInt(el.textContent) || 0;
+            
+            if (current !== newValue) {
+                el.style.transform = 'scale(1.1)';
+                el.style.color = '#3b82f6';
+                
+                let start = current;
+                const duration = 300;
+                const increment = (newValue - start) / (duration / 16);
+                
+                const timer = setInterval(() => {
+                    start += increment;
+                    if ((increment > 0 && start >= newValue) || (increment < 0 && start <= newValue)) {
+                        start = newValue;
+                        clearInterval(timer);
+                    }
+                    el.textContent = Math.round(start);
+                }, 16);
+                
+                setTimeout(() => {
+                    el.style.transform = 'scale(1)';
+                    el.style.color = '';
+                }, 300);
+            }
+        }
+        
+        function updateTrend(type, current, previous) {
+            const trendEl = document.getElementById(type + '-trend');
+            const changeEl = document.getElementById(type + '-change');
+            const change = current - previous;
+            
+            if (change > 0) {
+                trendEl.style.display = 'flex';
+                changeEl.textContent = '+' + change;
+                setTimeout(() => trendEl.style.display = 'none', 3000);
+            }
+        }
+        
+        function showAlert() {
+            const alert = document.getElementById('alert-banner');
+            alert.classList.add('show');
+            setTimeout(() => alert.classList.remove('show'), 5000);
+        }
+        
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        }
+        
+        function resetCounters() {
+            if (confirm('Reset all counters? This cannot be undone.')) {
+                fetch('/reset', { method: 'POST' })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            const alert = document.getElementById('alert-banner');
+                            alert.innerHTML = '<strong>✓ Reset Successful!</strong> All counters have been reset';
+                            alert.style.background = 'linear-gradient(135deg, #38ef7d, #11998e)';
+                            alert.classList.add('show');
+                            
+                            setTimeout(() => {
+                                alert.classList.remove('show');
+                                alert.style.background = 'linear-gradient(135deg, #ff6b6b, #ee5a6f)';
+                                alert.innerHTML = '<strong>⚠️ High Capacity Alert!</strong> Pool count exceeded 90% of maximum capacity';
+                            }, 3000);
+                            
+                            peakCount = 0;
+                        }
+                    })
+                    .catch(err => alert('Error: ' + err));
+            }
+        }
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'r' || e.key === 'R') location.reload();
+            if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+        });
+        
+        // Click to copy
+        document.querySelectorAll('.metric-value, .pool-value, .stat-mini-value').forEach(el => {
+            el.style.cursor = 'pointer';
+            el.title = 'Click to copy';
+            el.addEventListener('click', function() {
+                const value = this.textContent;
+                navigator.clipboard.writeText(value).then(() => {
+                    const original = this.textContent;
+                    this.textContent = '✓';
+                    setTimeout(() => this.textContent = original, 1000);
+                });
+            });
+        });
+        
+        // Initialize
+        updateTime();
+        setInterval(updateTime, 1000);
+        updateStats();
+        setInterval(updateStats, 500);
+        
+        console.log('🎯 Wonderla Pool Monitoring Dashboard');
+        console.log('📊 Keyboard: R=Reload | F=Fullscreen');
+    </script>
+</body>
+</html>
