@@ -101,7 +101,7 @@ class CentroidTracker:
 class RTSPStreamProcessor:
     """Process RTSP stream with head counting"""
     
-    def __init__(self, rtsp_url, model_path='yolov8n.pt', conf_threshold=0.35, box_shrink=0.4):
+    def __init__(self, rtsp_url, model_path='yolov8s.pt', conf_threshold=0.25, box_shrink=0.4):
         self.rtsp_url = rtsp_url
         self.model = YOLO(model_path)
         self.conf_threshold = conf_threshold
@@ -113,8 +113,8 @@ class RTSPStreamProcessor:
         self.pool_count = 0
         self.current_heads = 0
         
-        # Tracking
-        self.tracker = CentroidTracker(max_disappeared=50, max_distance=80)
+        # Tracking with optimized parameters for higher resolution
+        self.tracker = CentroidTracker(max_disappeared=60, max_distance=100)
         self.tracked_states = {}
         self.counted_ids = set()
         
@@ -162,8 +162,10 @@ class RTSPStreamProcessor:
     def process_frame(self, frame):
         """Process a single frame with error handling"""
         try:
-            # Run detection
-            results = self.model(frame, conf=self.conf_threshold, verbose=False, imgsz=320)
+            # Run detection with optimized GPU settings
+            results = self.model(frame, conf=self.conf_threshold, verbose=False, 
+                               imgsz=1024, device='cuda', half=True, 
+                               stream_buffer=True, max_det=50)
             
             # Extract detections
             detections = []
