@@ -1,21 +1,21 @@
 {
   "type": "zones",
   "upper_zone": [
-    0,
-    0,
-    1918,
-    376
+    4,
+    1,
+    2007,
+    604
   ],
   "lower_zone": [
-    1,
-    379,
-    1914,
-    1075
+    0,
+    603,
+    2329,
+    1263
   ],
   "description": "Zone-based counting: upper \u2192 lower = OUT, lower \u2192 upper = IN",
   "video_resolution": {
     "width": 1920,
     "height": 1080
   },
-  "video_path": "C:\\Users\\athul\\Documents\\wonderla\\WAVEPOOL TEST CAMERA_2025-12-01_03-55-00-2025-12-01_04-05-59.mp4"
+  "video_path": "rtsp_frame.jpg"
 }

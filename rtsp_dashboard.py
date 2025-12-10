@@ -16,22 +16,26 @@ import threading
 
 
 class CentroidTracker:
-    """Track objects across frames using centroids"""
+    """Track objects across frames using centroids and bounding boxes"""
     
-    def __init__(self, max_disappeared=30):
+    def __init__(self, max_disappeared=50, max_distance=80):
         self.next_object_id = 0
-        self.objects = {}
+        self.objects = {}  # Centroids
+        self.bboxes = {}  # Bounding boxes for better tracking
         self.disappeared = {}
         self.max_disappeared = max_disappeared
+        self.max_distance = max_distance
         
-    def register(self, centroid):
+    def register(self, centroid, bbox):
         self.objects[self.next_object_id] = centroid
+        self.bboxes[self.next_object_id] = bbox
         self.disappeared[self.next_object_id] = 0
         self.next_object_id += 1
         return self.next_object_id - 1
         
     def deregister(self, object_id):
         del self.objects[object_id]
+        del self.bboxes[object_id]
         del self.disappeared[object_id]
         
     def update(self, detections):
@@ -43,14 +47,16 @@ class CentroidTracker:
             return self.objects
             
         input_centroids = np.zeros((len(detections), 2), dtype="int")
+        input_bboxes = []
         for (i, (x1, y1, x2, y2)) in enumerate(detections):
             cx = int((x1 + x2) / 2.0)
             cy = int((y1 + y2) / 2.0)
             input_centroids[i] = (cx, cy)
+            input_bboxes.append((x1, y1, x2, y2))
             
         if len(self.objects) == 0:
-            for centroid in input_centroids:
-                self.register(centroid)
+            for i, centroid in enumerate(input_centroids):
+                self.register(centroid, input_bboxes[i])
         else:
             object_ids = list(self.objects.keys())
             object_centroids = list(self.objects.values())
@@ -66,11 +72,12 @@ class CentroidTracker:
                 if row in used_rows or col in used_cols:
                     continue
                     
-                if D[row, col] > 50:
+                if D[row, col] > self.max_distance:
                     continue
                     
                 object_id = object_ids[row]
                 self.objects[object_id] = input_centroids[col]
+                self.bboxes[object_id] = input_bboxes[col]
                 self.disappeared[object_id] = 0
                 
                 used_rows.add(row)
@@ -86,7 +93,7 @@ class CentroidTracker:
                     self.deregister(object_id)
                     
             for col in unused_cols:
-                self.register(input_centroids[col])
+                self.register(input_centroids[col], input_bboxes[col])
                 
         return self.objects
 
@@ -94,7 +101,7 @@ class CentroidTracker:
 class RTSPStreamProcessor:
     """Process RTSP stream with head counting"""
     
-    def __init__(self, rtsp_url, model_path='yolov8n.pt', conf_threshold=0.25, box_shrink=0.4):
+    def __init__(self, rtsp_url, model_path='yolov8n.pt', conf_threshold=0.35, box_shrink=0.4):
         self.rtsp_url = rtsp_url
         self.model = YOLO(model_path)
         self.conf_threshold = conf_threshold
@@ -107,7 +114,7 @@ class RTSPStreamProcessor:
         self.current_heads = 0
         
         # Tracking
-        self.tracker = CentroidTracker(max_disappeared=30)
+        self.tracker = CentroidTracker(max_disappeared=50, max_distance=80)
         self.tracked_states = {}
         self.counted_ids = set()
         
@@ -138,87 +145,100 @@ class RTSPStreamProcessor:
             self.lower_zone = [0, 120, 640, 288]
     
     def connect_stream(self):
-        """Connect to RTSP stream"""
-        os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|buffer_size;1024000"
+        """Connect to RTSP stream with error recovery"""
+        # Suppress H.264 decoding errors
+        os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|buffer_size;2048000|fflags;nobuffer|flags;low_delay"
+        os.environ["OPENCV_LOG_LEVEL"] = "ERROR"  # Suppress verbose errors
+        
         self.cap = cv2.VideoCapture(self.rtsp_url, cv2.CAP_FFMPEG)
-        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 3)
+        
+        # Optimized settings for stability
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # Minimal buffer to reduce lag
         self.cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'H264'))
+        self.cap.set(cv2.CAP_PROP_FPS, 15)  # Lower FPS for stability
+        
         return self.cap.isOpened()
     
     def process_frame(self, frame):
-        """Process a single frame"""
-        # Run detection
-        results = self.model(frame, conf=self.conf_threshold, verbose=False, imgsz=320)
-        
-        # Extract detections
-        detections = []
-        for result in results:
-            boxes = result.boxes
-            for box in boxes:
-                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+        """Process a single frame with error handling"""
+        try:
+            # Run detection
+            results = self.model(frame, conf=self.conf_threshold, verbose=False, imgsz=320)
+            
+            # Extract detections
+            detections = []
+            for result in results:
+                boxes = result.boxes
+                for box in boxes:
+                    x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                    
+                    # Shrink bounding box
+                    if self.box_shrink > 0:
+                        w = x2 - x1
+                        h = y2 - y1
+                        shrink_w = w * self.box_shrink / 2
+                        shrink_h = h * self.box_shrink / 2
+                        x1, y1 = x1 + shrink_w, y1 + shrink_h
+                        x2, y2 = x2 - shrink_w, y2 - shrink_h
+                    
+                    detections.append([x1, y1, x2, y2])
+                    
+                    # Draw detection
+                    cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), 
+                                (0, 255, 0), 2)
+            
+            # Update tracker
+            objects = self.tracker.update(detections)
+            self.current_heads = len(objects)
+            
+            # Check zone transitions
+            for object_id, centroid in objects.items():
+                cx, cy = centroid
                 
-                # Shrink bounding box
-                if self.box_shrink > 0:
-                    w = x2 - x1
-                    h = y2 - y1
-                    shrink_w = w * self.box_shrink / 2
-                    shrink_h = h * self.box_shrink / 2
-                    x1, y1 = x1 + shrink_w, y1 + shrink_h
-                    x2, y2 = x2 - shrink_w, y2 - shrink_h
+                # Initialize tracking state
+                if object_id not in self.tracked_states:
+                    self.tracked_states[object_id] = None
                 
-                detections.append([x1, y1, x2, y2])
+                # Determine current zone
+                in_upper = (self.upper_zone[0] <= cx <= self.upper_zone[2] and 
+                           self.upper_zone[1] <= cy <= self.upper_zone[3])
+                in_lower = (self.lower_zone[0] <= cx <= self.lower_zone[2] and 
+                           self.lower_zone[1] <= cy <= self.lower_zone[3])
                 
-                # Draw detection
-                cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), 
-                            (0, 255, 0), 2)
-        
-        # Update tracker
-        objects = self.tracker.update(detections)
-        self.current_heads = len(objects)
-        
-        # Check zone transitions
-        for object_id, centroid in objects.items():
-            cx, cy = centroid
+                current_zone = 'upper' if in_upper else ('lower' if in_lower else None)
+                previous_zone = self.tracked_states[object_id]
+                
+                # Detect crossing (adjusted for vertical flip)
+                if object_id not in self.counted_ids and current_zone and previous_zone:
+                    if previous_zone == 'upper' and current_zone == 'lower':
+                        self.in_count += 1
+                        self.counted_ids.add(object_id)
+                    elif previous_zone == 'lower' and current_zone == 'upper':
+                        self.out_count += 1
+                        self.counted_ids.add(object_id)
+                
+                self.tracked_states[object_id] = current_zone
+                
+                # Draw centroid and ID
+                cv2.circle(frame, (cx, cy), 4, (0, 0, 255), -1)
+                cv2.putText(frame, f"ID:{object_id}", (cx - 10, cy - 10),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
             
-            # Initialize tracking state
-            if object_id not in self.tracked_states:
-                self.tracked_states[object_id] = None
+            # Draw zones
+            cv2.rectangle(frame, (self.upper_zone[0], self.upper_zone[1]), 
+                        (self.upper_zone[2], self.upper_zone[3]), (255, 0, 0), 2)
+            cv2.rectangle(frame, (self.lower_zone[0], self.lower_zone[1]), 
+                        (self.lower_zone[2], self.lower_zone[3]), (0, 0, 255), 2)
             
-            # Determine current zone
-            in_upper = (self.upper_zone[0] <= cx <= self.upper_zone[2] and 
-                       self.upper_zone[1] <= cy <= self.upper_zone[3])
-            in_lower = (self.lower_zone[0] <= cx <= self.lower_zone[2] and 
-                       self.lower_zone[1] <= cy <= self.lower_zone[3])
+            # Calculate pool count
+            self.pool_count = self.in_count - self.out_count
             
-            current_zone = 'upper' if in_upper else ('lower' if in_lower else None)
-            previous_zone = self.tracked_states[object_id]
+            return frame
             
-            # Detect crossing
-            if object_id not in self.counted_ids and current_zone and previous_zone:
-                if previous_zone == 'upper' and current_zone == 'lower':
-                    self.in_count += 1
-                    self.counted_ids.add(object_id)
-                elif previous_zone == 'lower' and current_zone == 'upper':
-                    self.out_count += 1
-                    self.counted_ids.add(object_id)
-            
-            self.tracked_states[object_id] = current_zone
-            
-            # Draw centroid and ID
-            cv2.circle(frame, (cx, cy), 4, (0, 0, 255), -1)
-            cv2.putText(frame, f"ID:{object_id}", (cx - 10, cy - 10),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-        
-        # Draw zones
-        cv2.rectangle(frame, (self.upper_zone[0], self.upper_zone[1]), 
-                    (self.upper_zone[2], self.upper_zone[3]), (255, 0, 0), 2)
-        cv2.rectangle(frame, (self.lower_zone[0], self.lower_zone[1]), 
-                    (self.lower_zone[2], self.lower_zone[3]), (0, 0, 255), 2)
-        
-        # Calculate pool count
-        self.pool_count = self.in_count - self.out_count
-        
-        return frame
+        except Exception as e:
+            # Return original frame if processing fails
+            print(f"Frame processing error (skipping): {str(e)[:50]}")
+            return frame
     
     def start(self):
         """Start processing stream"""
@@ -227,7 +247,11 @@ class RTSPStreamProcessor:
         thread.start()
     
     def _process_loop(self):
-        """Main processing loop"""
+        """Main processing loop with robust error handling"""
+        reconnect_attempts = 0
+        max_reconnects = 10
+        last_valid_frame = None
+        
         if not self.connect_stream():
             print("Failed to connect to RTSP stream")
             return
@@ -237,15 +261,35 @@ class RTSPStreamProcessor:
         while self.is_running:
             ret, frame = self.cap.read()
             
-            if not ret:
-                print("Stream disconnected, attempting reconnect...")
+            if not ret or frame is None:
+                print(f"Stream disconnected (attempt {reconnect_attempts + 1}/{max_reconnects})")
+                
+                # Use last valid frame while reconnecting
+                if last_valid_frame is not None:
+                    with self.lock:
+                        self.frame = last_valid_frame
+                
                 self.cap.release()
-                time.sleep(2)
+                time.sleep(1)  # Shorter wait
+                
+                reconnect_attempts += 1
+                if reconnect_attempts >= max_reconnects:
+                    print("Max reconnect attempts reached")
+                    break
+                
                 if not self.connect_stream():
                     continue
+                else:
+                    reconnect_attempts = 0  # Reset on successful connect
                 continue
             
+            # Valid frame received
+            reconnect_attempts = 0
+            
+            # Flip frame vertically
+            frame = cv2.flip(frame, 0)
             self.frame_count += 1
+            last_valid_frame = frame.copy()  # Keep backup
             
             # Process frame
             processed_frame = self.process_frame(frame)
