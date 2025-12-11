@@ -129,6 +129,10 @@ class RTSPStreamProcessor:
         self.frame_count = 0
         self.start_time = time.time()
         
+        # Logging
+        self.log_file = 'logs.html'
+        self.init_log_file()
+        
         # Load zones
         self.load_zones()
         
@@ -143,6 +147,57 @@ class RTSPStreamProcessor:
         else:
             self.upper_zone = [0, 0, 640, 120]
             self.lower_zone = [0, 120, 640, 288]
+    
+    def init_log_file(self):
+        """Initialize HTML log file"""
+        html_header = '''<!DOCTYPE html>
+<html>
+<head>
+    <title>Head Counter Logs</title>
+    <style>
+        body { font-family: Arial; margin: 20px; background: #f5f5f5; }
+        h1 { color: #333; }
+        table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        th { background: #667eea; color: white; padding: 12px; text-align: left; }
+        td { padding: 10px; border-bottom: 1px solid #ddd; }
+        .in { color: #28a745; font-weight: bold; }
+        .out { color: #dc3545; font-weight: bold; }
+        tr:hover { background: #f8f9fa; }
+    </style>
+</head>
+<body>
+    <h1>Head Counter Event Logs</h1>
+    <p>Started: ''' + time.strftime('%Y-%m-%d %H:%M:%S') + '''</p>
+    <table>
+        <tr>
+            <th>Timestamp</th>
+            <th>Event</th>
+            <th>Object ID</th>
+            <th>Total IN</th>
+            <th>Total OUT</th>
+            <th>Net Count</th>
+        </tr>
+'''
+        with open(self.log_file, 'w', encoding='utf-8') as f:
+            f.write(html_header)
+    
+    def log_event(self, event_type, object_id):
+        """Log counting event to HTML file"""
+        timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
+        event_class = 'in' if event_type == 'IN' else 'out'
+        net_count = self.in_count - self.out_count
+        
+        log_entry = f'''        <tr>
+            <td>{timestamp}</td>
+            <td class="{event_class}">{event_type}</td>
+            <td>#{object_id}</td>
+            <td>{self.in_count}</td>
+            <td>{self.out_count}</td>
+            <td>{net_count}</td>
+        </tr>
+'''
+        with open(self.log_file, 'a', encoding='utf-8') as f:
+            f.write(log_entry)
     
     def connect_stream(self):
         """Connect to RTSP stream with error recovery"""
@@ -215,9 +270,11 @@ class RTSPStreamProcessor:
                     if previous_zone == 'upper' and current_zone == 'lower':
                         self.in_count += 1
                         self.counted_ids.add(object_id)
+                        self.log_event('IN', object_id)
                     elif previous_zone == 'lower' and current_zone == 'upper':
                         self.out_count += 1
                         self.counted_ids.add(object_id)
+                        self.log_event('OUT', object_id)
                 
                 self.tracked_states[object_id] = current_zone
                 

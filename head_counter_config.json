@@ -1,21 +1,21 @@
 {
   "type": "zones",
   "upper_zone": [
-    4,
-    1,
-    2007,
-    604
+    3,
+    2,
+    1277,
+    350
   ],
   "lower_zone": [
     0,
-    603,
-    2329,
-    1263
+    351,
+    1277,
+    717
   ],
   "description": "Zone-based counting: upper \u2192 lower = OUT, lower \u2192 upper = IN",
   "video_resolution": {
-    "width": 1920,
-    "height": 1080
+    "width": 1280,
+    "height": 720
   },
   "video_path": "rtsp_frame.jpg"
 }

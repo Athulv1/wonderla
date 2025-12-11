@@ -658,6 +658,27 @@
                     <span class="info-value" id="uptime">00:00:00</span>
                 </div>
             </div>
+            
+            <!-- Stream Health -->
+            <div class="system-info" style="margin-top: 15px; border-top: 2px solid rgba(255,255,255,0.1); padding-top: 15px;">
+                <div class="quick-action-title" style="margin-bottom: 10px;">📡 Stream Health</div>
+                <div class="info-item">
+                    <span class="info-label">Health:</span>
+                    <span class="info-value" id="stream-health" style="color: #38ef7d;">● Good</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Valid Frames:</span>
+                    <span class="info-value" id="valid-frames">0 / 0</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Corruption:</span>
+                    <span class="info-value" id="corruption-rate" style="color: #38ef7d;">0%</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Transport:</span>
+                    <span class="info-value" style="color: #11998e;">TCP</span>
+                </div>
+            </div>
         </aside>
         
         <!-- Main Content -->
@@ -761,7 +782,8 @@
 
     <script>
         // State tracking
-        let previousStats = { in_count: 0, out_count: 0, pool_count: 0, current_heads: 0, fps: 0 };
+        let previousStats = { in_count: 0, out_count: 0, pool_count: 0, current_heads: 0, fps: 0, 
+                              valid_frames: 0, total_frames: 0, corruption_rate: 0, stream_health: 'Unknown' };
         let peakCount = 0;
         let startTime = Date.now();
         const MAX_CAPACITY = 50;
@@ -803,6 +825,35 @@
                     
                     // Update FPS badges
                     document.getElementById('fps-badge').textContent = data.fps.toFixed(1) + ' FPS';
+                    
+                    // Update stream health metrics
+                    if (data.stream_health) {
+                        const healthEl = document.getElementById('stream-health');
+                        healthEl.textContent = '● ' + data.stream_health;
+                        if (data.stream_health === 'Good') {
+                            healthEl.style.color = '#38ef7d';
+                        } else if (data.stream_health === 'Warning') {
+                            healthEl.style.color = '#ffc107';
+                        } else {
+                            healthEl.style.color = '#dc3545';
+                        }
+                    }
+                    
+                    if (data.valid_frames !== undefined && data.total_frames !== undefined) {
+                        document.getElementById('valid-frames').textContent = data.valid_frames + ' / ' + data.total_frames;
+                    }
+                    
+                    if (data.corruption_rate !== undefined) {
+                        const corruptEl = document.getElementById('corruption-rate');
+                        corruptEl.textContent = data.corruption_rate.toFixed(1) + '%';
+                        if (data.corruption_rate < 10) {
+                            corruptEl.style.color = '#38ef7d';
+                        } else if (data.corruption_rate < 30) {
+                            corruptEl.style.color = '#ffc107';
+                        } else {
+                            corruptEl.style.color = '#dc3545';
+                        }
+                    }
                     
                     // Update trends
                     updateTrend('in', data.in_count, previousStats.in_count);
