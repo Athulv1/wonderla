@@ -113,9 +113,9 @@ class RTSPStreamProcessor:
         self.pool_count = 0
         self.current_heads = 0
         
-        # Tracking with optimized parameters for higher resolution
+        # Line crossing tracking
         self.tracker = CentroidTracker(max_disappeared=60, max_distance=100)
-        self.tracked_states = {}
+        self.previous_positions = {}  # Store previous Y positions
         self.counted_ids = set()
         
         # Stream state
@@ -142,11 +142,25 @@ class RTSPStreamProcessor:
         if os.path.exists(config_file):
             with open(config_file, 'r') as f:
                 config = json.load(f)
-                self.upper_zone = config.get('upper_zone', [0, 0, 640, 120])
-                self.lower_zone = config.get('lower_zone', [0, 120, 640, 288])
+                config_type = config.get('type', 'zones')
+                
+                if config_type == 'two_lines':
+                    # Two-line configuration
+                    self.in_line_y = config.get('in_line_y', 300)
+                    self.out_line_y = config.get('out_line_y', 500)
+                    self.config_type = 'two_lines'
+                else:
+                    # Legacy zone configuration - convert to two lines
+                    self.upper_zone = config.get('upper_zone', [0, 0, 640, 120])
+                    self.lower_zone = config.get('lower_zone', [0, 120, 640, 288])
+                    self.out_line_y = self.upper_zone[3]  # Use current line for OUT
+                    self.in_line_y = self.lower_zone[1]  # Create new line for IN
+                    self.config_type = 'zones'
         else:
-            self.upper_zone = [0, 0, 640, 120]
-            self.lower_zone = [0, 120, 640, 288]
+            # Defaults
+            self.out_line_y = 300
+            self.in_line_y = 500
+            self.config_type = 'two_lines'
     
     def init_log_file(self):
         """Initialize HTML log file"""
@@ -248,46 +262,55 @@ class RTSPStreamProcessor:
             objects = self.tracker.update(detections)
             self.current_heads = len(objects)
             
-            # Check zone transitions
+            # Check line crossings for both IN and OUT lines
             for object_id, centroid in objects.items():
                 cx, cy = centroid
                 
-                # Initialize tracking state
-                if object_id not in self.tracked_states:
-                    self.tracked_states[object_id] = None
+                # Get previous position
+                prev_y = self.previous_positions.get(object_id)
                 
-                # Determine current zone
-                in_upper = (self.upper_zone[0] <= cx <= self.upper_zone[2] and 
-                           self.upper_zone[1] <= cy <= self.upper_zone[3])
-                in_lower = (self.lower_zone[0] <= cx <= self.lower_zone[2] and 
-                           self.lower_zone[1] <= cy <= self.lower_zone[3])
+                # Detect line crossings
+                if prev_y is not None:
+                    # Check IN line crossing (downward)
+                    if f'in_{object_id}' not in self.counted_ids:
+                        if prev_y < self.in_line_y <= cy:
+                            self.in_count += 1
+                            self.counted_ids.add(f'in_{object_id}')
+                            self.log_event('IN', object_id)
+                    
+                    # Check OUT line crossing (upward)
+                    if f'out_{object_id}' not in self.counted_ids:
+                        if prev_y > self.out_line_y >= cy:
+                            self.out_count += 1
+                            self.counted_ids.add(f'out_{object_id}')
+                            self.log_event('OUT', object_id)
                 
-                current_zone = 'upper' if in_upper else ('lower' if in_lower else None)
-                previous_zone = self.tracked_states[object_id]
-                
-                # Detect crossing (adjusted for vertical flip)
-                if object_id not in self.counted_ids and current_zone and previous_zone:
-                    if previous_zone == 'upper' and current_zone == 'lower':
-                        self.in_count += 1
-                        self.counted_ids.add(object_id)
-                        self.log_event('IN', object_id)
-                    elif previous_zone == 'lower' and current_zone == 'upper':
-                        self.out_count += 1
-                        self.counted_ids.add(object_id)
-                        self.log_event('OUT', object_id)
-                
-                self.tracked_states[object_id] = current_zone
+                # Update previous position
+                self.previous_positions[object_id] = cy
                 
                 # Draw centroid and ID
                 cv2.circle(frame, (cx, cy), 4, (0, 0, 255), -1)
                 cv2.putText(frame, f"ID:{object_id}", (cx - 10, cy - 10),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
             
-            # Draw zones
-            cv2.rectangle(frame, (self.upper_zone[0], self.upper_zone[1]), 
-                        (self.upper_zone[2], self.upper_zone[3]), (255, 0, 0), 2)
-            cv2.rectangle(frame, (self.lower_zone[0], self.lower_zone[1]), 
-                        (self.lower_zone[2], self.lower_zone[3]), (0, 0, 255), 2)
+            # Clean up old positions for disappeared objects
+            tracked_ids = set(objects.keys())
+            disappeared_ids = set(self.previous_positions.keys()) - tracked_ids
+            for obj_id in disappeared_ids:
+                del self.previous_positions[obj_id]
+                # Remove from counted set when object disappears
+                self.counted_ids.discard(f'in_{obj_id}')
+                self.counted_ids.discard(f'out_{obj_id}')
+            
+            # Draw IN line (green)
+            cv2.line(frame, (0, self.in_line_y), (frame.shape[1], self.in_line_y), (0, 255, 0), 3)
+            cv2.putText(frame, "IN LINE", (10, self.in_line_y - 10),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            
+            # Draw OUT line (red)
+            cv2.line(frame, (0, self.out_line_y), (frame.shape[1], self.out_line_y), (0, 0, 255), 3)
+            cv2.putText(frame, "OUT LINE", (10, self.out_line_y + 25),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
             
             # Calculate pool count
             self.pool_count = self.in_count - self.out_count

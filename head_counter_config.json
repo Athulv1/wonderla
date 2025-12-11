@@ -1,18 +1,8 @@
 {
-  "type": "zones",
-  "upper_zone": [
-    3,
-    2,
-    1277,
-    350
-  ],
-  "lower_zone": [
-    0,
-    351,
-    1277,
-    717
-  ],
-  "description": "Zone-based counting: upper \u2192 lower = OUT, lower \u2192 upper = IN",
+  "type": "two_lines",
+  "in_line_y": 556,
+  "out_line_y": 115,
+  "description": "Two-line counting: Cross IN line = IN count, Cross OUT line = OUT count",
   "video_resolution": {
     "width": 1280,
     "height": 720
