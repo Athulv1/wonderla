@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Video files
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.MP4
+*.AVI
+*.MOV
+*.MKV
+
+# Output files
+outputs/
+uploads/
+wavepool*.mp4
+wavepool*.json
+processed_*.mp4
+
+# Model weights (YOLOv8 downloads)
+yolov8*.pt
+*.pt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
